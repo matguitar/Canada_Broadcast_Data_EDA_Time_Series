@@ -1,4 +1,4 @@
-# 📊 Broadcast Log Data – Government of Canada
+# Broadcast Log Data – Government of Canada
 
 ## Resumo
 
@@ -29,7 +29,3 @@ Fonte: Open Government Portal – Government of Canada
 - PySpark
 - Databricks
 
-
-1. Clone o repositório:
-   ```bash
-   git clone https://github.com/seu-usuario/seu-repositorio.git
