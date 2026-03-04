@@ -1,0 +1,102 @@
+import mlflow
+import mlflow.spark
+import os
+from pyspark.ml.feature import StringIndexer, VectorAssembler, StandardScaler
+from pyspark.ml.clustering import KMeans
+from pyspark.ml import Pipeline
+from mlflow.models import infer_signature
+from pyspark.sql import functions as F
+
+# Configuração de ambiente (Modelo implementado no Databricks)
+CATALOG = "workspace"
+SCHEMA = "default"
+VOLUME_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/mlflow_volume/tmp"
+os.environ["MLFLOW_DFS_TMP"] = VOLUME_PATH
+
+# 1. Carregar dados mantendo o ID
+# Fazemos o cast de Duration para Double para evitar avisos de schema
+data = spark.table(f"{CATALOG}.{SCHEMA}.broadcast_silver")
+df = data.select("BroadcastLogID", "Duration", "ProgramClassID") 
+cols = ["Duration", "ProgramClassID"]
+# O dropna aqui garante que o treino seja limpo, mas o Pipeline precisa ser robusto
+df_train = df.dropna(subset=["Duration", "ProgramClassID"])
+
+with mlflow.start_run() as run:
+    
+    # STAGE 1: StringIndexer
+    indexer = StringIndexer(
+        inputCol="ProgramClassID", 
+        outputCol="ProgramClassID_index",
+        handleInvalid="keep" # Crucial: lida com categorias novas ou nulas
+    )
+    
+    # STAGE 2: VectorAssembler
+    # CORREÇÃO DEFINITIVA: handleInvalid="keep" impede o erro GRPC/Internal Server Error
+    assembler = VectorAssembler(
+        inputCols=["Duration", "ProgramClassID_index"],
+        outputCol="unscaled_features",
+        handleInvalid="keep" 
+    )
+    
+    # STAGE 3: StandardScaler
+    scaler = StandardScaler(
+        inputCol="unscaled_features",
+        outputCol="features",
+        withStd=True,
+        withMean=True
+    )
+    
+    # STAGE 4: KMeans
+    kmeans = KMeans(featuresCol="features", k=4, seed=42)
+    
+    # Pipeline
+    pipeline = Pipeline(stages=[indexer, assembler, scaler, kmeans])
+    model_pipeline = pipeline.fit(df_train)
+    
+    # 2. Predições: O Spark vai carregar o BroadcastLogID junto, mas não vai usá-lo no modelo
+    predictions = model_pipeline.transform(df_train)
+    
+    # 3. Limpeza para a Camada Gold
+    # Mantemos o ID original, as features de entrada e a predição
+    predictions_gold = predictions.select(
+        "BroadcastLogID",
+        "Duration",
+        "ProgramClassID",
+        "prediction"
+    )
+    
+    # 4. Salvar Tabela Gold
+    table_name = f"{CATALOG}.{SCHEMA}.broadcast_kmeans_gold"
+    predictions_gold.write \
+        .mode("overwrite") \
+        .option("overwriteSchema", "true") \
+        .saveAsTable(table_name)
+    
+    # 5. MLflow Signature (Apenas colunas de entrada do modelo)
+    input_example = df_train.select("Duration", "ProgramClassID").limit(5).toPandas()
+    output_example = predictions.select("prediction").limit(5).toPandas()
+    signature = infer_signature(input_example, output_example)
+    
+    mlflow.log_param("k", 5)
+    mlflow.log_param("features", cols)
+    mlflow.log_param("with_scaling", True)
+    mlflow.log_param("output_table", table_name)
+    
+    try:
+        sse = model_pipeline.stages[-1].summary.trainingCost
+        mlflow.log_metric("sse", sse)
+    except:
+        pass
+
+    # Log do modelo com Requisitos Fixos
+    mlflow.spark.log_model(
+        spark_model=model_pipeline,
+        artifact_path="kmeans_pipeline",
+        signature=signature,
+        input_example=input_example,
+        dfs_tmpdir=VOLUME_PATH,
+        pip_requirements=["pyspark==4.0.0", "mlflow"],
+        registered_model_name=f"{CATALOG}.{SCHEMA}.kmeans_broadcast_model"
+    )
+
+print(f"Pipeline concluído. Tabela Gold disponível em: {table_name}")
