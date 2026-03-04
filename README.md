@@ -4,8 +4,8 @@
 
 Este projeto utiliza dados públicos disponibilizados pelo Governo do Canadá por meio do portal oficial de dados abertos.
 O objetivo é realizar tratamento, análise e visualização dos dados, gerando insights a partir das informações fornecidas. 
-Neste primeiro momento foi realiza ingestão de bases de dados referente ao primeiro trimestre de 2018. As bases são bem volumosas
-e por isso, optei por utilizar ferramentas para Big Data.
+Neste primeiro momento, foi realiza a ingestão de bases de dados referente ao primeiro trimestre de 2018. As bases são bem volumosas,
+com isso optei em utilizar ferramentas para Big Data.
 
 Dashboard: https://dbc-4a4972cc-e17d.cloud.databricks.com/dashboardsv3/01f111b329bc1bd3b66921f58d6a80be/published?o=7474650092512615
 
