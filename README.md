@@ -25,7 +25,7 @@ Fonte: Open Government Portal – Government of Canada
 ## Tecnologias Utilizadas
 
 - Python
-- Pandas
+- Mlflow
 - PySpark
 - Databricks
 
