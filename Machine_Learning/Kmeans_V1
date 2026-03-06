@@ -7,6 +7,8 @@ from pyspark.ml import Pipeline
 from mlflow.models import infer_signature
 from pyspark.sql import functions as F
 
+#OBS: cada vez que rodar o modelo a plataforma cria uma nova versão
+
 # Configuração de ambiente (Modelo implementado no Databricks)
 CATALOG = "workspace"
 SCHEMA = "default"
@@ -31,7 +33,6 @@ with mlflow.start_run() as run:
     )
     
     # STAGE 2: VectorAssembler
-    # CORREÇÃO DEFINITIVA: handleInvalid="keep" impede o erro GRPC/Internal Server Error
     assembler = VectorAssembler(
         inputCols=["Duration", "ProgramClassID_index"],
         outputCol="unscaled_features",
@@ -99,4 +100,4 @@ with mlflow.start_run() as run:
         registered_model_name=f"{CATALOG}.{SCHEMA}.kmeans_broadcast_model"
     )
 
-print(f"Pipeline concluído. Tabela Gold disponível em: {table_name}")
+print(f"Pipeline concluído. Tabela disponível em: {table_name}")
